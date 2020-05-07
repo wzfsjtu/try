@@ -333,44 +333,36 @@ def task2():
 
     try:
         for epoch in range(EPOCH):
-            train_loss = 0
-            train_count = 0
             for step, (pos_img, neg_img, train_weight) in enumerate(train_loader):
                 if use_gpu:
                     pos_img = pos_img.cuda()
                     train_weight = train_weight.cuda()
                 train_output = net(pos_img)
                 loss = loss_func(train_output, train_weight)
-                train_loss += loss.detach().cpu().data * train_output.size(0)
-                train_count += train_output.size(0)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
 
-                print("Epoch: {}, step: {}, loss: {}".format(epoch, step, loss.detach().cpu().data))
-            # 计算出整个epoch的loss，注意最后一个step的batchsize
-            print("Epoch: {}, train_loss: {}".format(epoch, train_loss / train_count))
-            train_epoch_loss.append(train_loss / train_count)
-
             # scheduler.step()
             # print('LR: {}'.format(scheduler.get_lr()))
-
-            net.eval()
-            with torch.no_grad():
-                validate_loss = 0
-                validate_count = 0
-                for step, (validate_pos_img, validate_neg_img, validate_weight) in enumerate(validate_loader):
-                    torch.cuda.empty_cache()
-                    if use_gpu:
-                        validate_pos_img = validate_pos_img.cuda()
-                        validate_weight = validate_weight.cuda()
-                    validate_output = net(validate_pos_img)
-                    loss = loss_func(validate_output, validate_weight)
-                    validate_loss += loss.detach().cpu().data * validate_output.size(0)
-                    validate_count += validate_output.size(0)
-                print("Epoch: {}, validate_loss: {}".format(epoch, validate_loss / validate_count))
-                validate_epoch_loss.append(validate_loss / validate_count)
-            net.train()
+            if (epoch + 1) % 5 == 0:
+                print("Epoch {}".format(epoch))
+                net.eval()
+                with torch.no_grad():
+                    validate_loss = 0
+                    validate_count = 0
+                    for step, (validate_pos_img, validate_neg_img, validate_weight) in enumerate(validate_loader):
+                        torch.cuda.empty_cache()
+                        if use_gpu:
+                            validate_pos_img = validate_pos_img.cuda()
+                            validate_weight = validate_weight.cuda()
+                        validate_output = net(validate_pos_img)
+                        loss = loss_func(validate_output, validate_weight)
+                        validate_loss += loss.detach().cpu().data * validate_output.size(0)
+                        validate_count += validate_output.size(0)
+                    print("Epoch: {}, validate_loss: {}".format(epoch, validate_loss / validate_count))
+                    validate_epoch_loss.append(validate_loss / validate_count)
+                net.train()
 
         net.eval()
         with torch.no_grad():
@@ -391,23 +383,23 @@ def task2():
                 test_count += test_output.size(0)
 
             print('loss: {}'.format(test_loss / test_count))
-        plt.figure('loss')
-        plt.plot(range(len(train_epoch_loss)), train_epoch_loss, color='blue')
-        plt.plot(range(len(validate_epoch_loss)), validate_epoch_loss, color='red')
-        plt.legend(['train_loss', 'validate_loss'])
-        plt.axis([0, EPOCH, 0, 2])
-        # plt.show()
-        plt.savefig(r'E:\科研\研究生\小麦\loss1.png')
-        print(test_grounds)
-        print(test_preds)
-        plt.figure('pred')
-        plt.scatter(test_grounds, test_preds)
-        plt.grid()
-        plt.plot([0, 1], [0, 1])
-        # plt.show()
-        plt.savefig(r'E:\科研\研究生\小麦\pred1.png')
-        Err = [abs(test_preds[i] - test_grounds[i]) / test_grounds[i] for i in range(len(test_grounds))]
-        print("Error:", sum(Err) / len(Err))
+        # plt.figure('loss')
+        # plt.plot(range(len(train_epoch_loss)), train_epoch_loss, color='blue')
+        # plt.plot(range(len(validate_epoch_loss)), validate_epoch_loss, color='red')
+        # plt.legend(['train_loss', 'validate_loss'])
+        # plt.axis([0, EPOCH, 0, 2])
+        # # plt.show()
+        # plt.savefig(r'E:\科研\研究生\小麦\loss1.png')
+        # print(test_grounds)
+        # print(test_preds)
+        # plt.figure('pred')
+        # plt.scatter(test_grounds, test_preds)
+        # plt.grid()
+        # plt.plot([0, 1], [0, 1])
+        # # plt.show()
+        # plt.savefig(r'E:\科研\研究生\小麦\pred1.png')
+        # Err = [abs(test_preds[i] - test_grounds[i]) / test_grounds[i] for i in range(len(test_grounds))]
+        # print("Error:", sum(Err) / len(Err))
 
     except BaseException as exception:
         print('Exception: {}'.format(exception))
