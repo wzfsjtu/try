@@ -153,9 +153,9 @@ class MyDataSet(Data.Dataset):
             torchvision.transforms.ToPILImage(),
             torchvision.transforms.Resize((224, 224)),        # 对PIL图像（HWC）resize，默认双线性插值
             # augmentation
-            torchvision.transforms.RandomHorizontalFlip(),
-            torchvision.transforms.RandomVerticalFlip(),
-            torchvision.transforms.ColorJitter(brightness=0.1),
+            # torchvision.transforms.RandomHorizontalFlip(),
+            # torchvision.transforms.RandomVerticalFlip(),
+            # torchvision.transforms.ColorJitter(brightness=0.1),
             torchvision.transforms.ToTensor(),
 
             #
@@ -306,7 +306,7 @@ def task1():
 
 
 def task2():
-    EPOCH = 50
+    EPOCH = 100
     LR = 0.0001
     BATCH_SIZE = 20
     train_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info1.txt', set_type='A')
@@ -325,7 +325,6 @@ def task2():
         net.cuda()
         loss_func.cuda()
 
-    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
     train_epoch_loss = []
     validate_epoch_loss = []
     test_grounds = []
@@ -343,10 +342,9 @@ def task2():
                 loss.backward()
                 optimizer.step()
 
-            # scheduler.step()
-            # print('LR: {}'.format(scheduler.get_lr()))
             if (epoch + 1) % 5 == 0:
                 print("Epoch {}".format(epoch))
+                torch.save(torch.nn.Module.state_dict(net), '.\epoch_{}.pth'.format(epoch))
                 net.eval()
                 with torch.no_grad():
                     validate_loss = 0
@@ -358,7 +356,7 @@ def task2():
                             validate_weight = validate_weight.cuda()
                         validate_output = net(validate_pos_img)
                         loss = loss_func(validate_output, validate_weight)
-                        validate_loss += loss.detach().cpu().data * validate_output.size(0)
+                        validate_loss += loss.clone().detach().cpu().data * validate_output.size(0)
                         validate_count += validate_output.size(0)
                     print("Epoch: {}, validate_loss: {}".format(epoch, validate_loss / validate_count))
                     validate_epoch_loss.append(validate_loss / validate_count)
@@ -376,13 +374,15 @@ def task2():
                     test_weight = test_weight.cuda()
                 test_output = net(test_pos_img)
                 loss = loss_func(test_output, test_weight)
-                print(test_output.detach().cpu().data, "|", test_weight.detach().cpu().data, "\n")
-                test_grounds.append(float(test_weight.detach().cpu().data[0][0]))
-                test_preds.append(float(test_output.detach().cpu().data[0][0]))
-                test_loss += loss.detach().cpu().data * test_output.size(0)
+                print(test_output.clone().detach().cpu().data, "|", test_weight.clone().detach().cpu().data, "\n")
+                test_grounds.append(float(test_weight.clone().detach().cpu().data[0][0]))
+                test_preds.append(float(test_output.clone().detach().cpu().data[0][0]))
+                test_loss += loss.clone().detach().cpu().data * test_output.size(0)
                 test_count += test_output.size(0)
 
             print('loss: {}'.format(test_loss / test_count))
+
+
         # plt.figure('loss')
         # plt.plot(range(len(train_epoch_loss)), train_epoch_loss, color='blue')
         # plt.plot(range(len(validate_epoch_loss)), validate_epoch_loss, color='red')
@@ -400,6 +400,115 @@ def task2():
         # plt.savefig(r'E:\科研\研究生\小麦\pred1.png')
         # Err = [abs(test_preds[i] - test_grounds[i]) / test_grounds[i] for i in range(len(test_grounds))]
         # print("Error:", sum(Err) / len(Err))
+
+        net.eval()
+        train_loader = Data.DataLoader(dataset=train_data, batch_size=1, shuffle=False)
+        with torch.no_grad():
+            for i in range(EPOCH // 5):
+                print('Epoch {}'.format(i * 5 + 4))
+                torch.nn.Module.load_state_dict(net, torch.load(r'.\epoch_{}.pth'.format(i * 5 + 4)))
+                # train
+                train_loss = 0
+                train_count = 0
+                train_err = []
+                plt.figure('train_{}'.format(i * 5 + 4))
+                plt.plot([15, 65], [15, 65])
+                plt.grid()
+                plt.axis([0, 70, 0, 70])
+                plt.xlabel('ground')
+                plt.ylabel('pred')
+                for step, (train_pos_img, train_neg_img, train_weight) in enumerate(train_loader):
+                    if use_gpu:
+                        train_pos_img = train_pos_img.cuda()
+                        train_weight = train_weight.cuda()
+                    train_output = net(train_pos_img)
+                    loss = loss_func(train_output, train_weight)
+                    train_count += 1
+                    train_loss += loss.clone().detach().cpu().data
+                    print('train {}, loss:'.format(step), loss.clone().detach().cpu().data)
+                    pred = train_output.clone().detach().cpu().requires_grad_(False).tolist()[0][0]
+                    ground = train_weight.clone().detach().cpu().requires_grad_(False).tolist()[0][0]
+
+                    pred = pred * (63 - 19) + 19
+                    ground = ground * (63 - 19) + 19
+                    err = abs(pred - ground) / ground
+                    print('pred: {}, ground: {}, err: {}'.format(pred, ground, err))
+                    train_err.append(err)
+                    plt.scatter(ground, pred, color='green')
+                print("loss: {}".format(train_loss / train_count / 2))
+                print(train_err)
+                print("mean err:", sum(train_err) / len(train_err))
+
+                # plt.show()
+                plt.savefig(r'E:\科研\研究生\小麦\Result\train_{}.png'.format(i * 5 + 4))
+
+                # validate
+                validate_loss = 0
+                validate_count = 0
+                validate_err = []
+                plt.figure('validate_{}'.format(i * 5 + 4))
+                plt.plot([15, 65], [15, 65])
+                plt.grid()
+                plt.axis([0, 70, 0, 70])
+                plt.xlabel('ground')
+                plt.ylabel('pred')
+                for step, (validate_pos_img, validate_neg_img, validate_weight) in enumerate(validate_loader):
+                    if use_gpu:
+                        validate_pos_img = validate_pos_img.cuda()
+                        validate_weight = validate_weight.cuda()
+                    validate_output = net(validate_pos_img)
+                    loss = loss_func(validate_output, validate_weight)
+                    validate_count += 1
+                    validate_loss += loss.clone().detach().cpu().data
+                    print('validate {}, loss:'.format(step), loss.clone().detach().cpu().data)
+                    pred = validate_output.clone().detach().cpu().requires_grad_(False).tolist()[0][0]
+                    ground = validate_weight.clone().detach().cpu().requires_grad_(False).tolist()[0][0]
+
+                    pred = pred * (63 - 19) + 19
+                    ground = ground * (63 - 19) + 19
+                    err = abs(pred - ground) / ground
+                    print('pred: {}, ground: {}, err: {}'.format(pred, ground, err))
+                    validate_err.append(err)
+                    plt.scatter(ground, pred, color='blue')
+                print("loss: {}".format(validate_loss / validate_count / 2))
+                print(validate_err)
+                print("mean err:", sum(validate_err) / len(validate_err))
+
+                # plt.show()
+                plt.savefig(r'E:\科研\研究生\小麦\Result\validate_{}.png'.format(i * 5 + 4))
+                # test
+                test_loss = 0
+                test_count = 0
+                test_err = []
+                plt.figure('test_{}'.format(i * 5 + 4))
+                plt.plot([15, 65], [15, 65])
+                plt.grid()
+                plt.axis([0, 70, 0, 70])
+                plt.xlabel('ground')
+                plt.ylabel('pred')
+                for step, (test_pos_img, test_neg_img, test_weight) in enumerate(test_loader):
+                    if use_gpu:
+                        test_pos_img = test_pos_img.cuda()
+                        test_weight = test_weight.cuda()
+                    test_output = net(test_pos_img)
+                    loss = loss_func(test_output, test_weight)
+                    test_count += 1
+                    test_loss += loss.clone().detach().cpu().data
+                    print('test {}, loss:'.format(step), loss.clone().detach().cpu().data)
+                    pred = test_output.clone().detach().cpu().requires_grad_(False).tolist()[0][0]
+                    ground = test_weight.clone().detach().cpu().requires_grad_(False).tolist()[0][0]
+
+                    pred = pred * (63 - 19) + 19
+                    ground = ground * (63 - 19) + 19
+                    err = abs(pred - ground) / ground
+                    print('pred: {}, ground: {}, err: {}'.format(pred, ground, err))
+                    test_err.append(err)
+                    plt.scatter(ground, pred, color='red')
+                print("loss: {}".format(test_loss / test_count / 2))
+                print(test_err)
+                print("mean err:", sum(test_err) / len(test_err))
+                plt.savefig(r'E:\科研\研究生\小麦\Result\test_{}.png'.format(i * 5 + 4))
+
 
     except BaseException as exception:
         print('Exception: {}'.format(exception))
@@ -466,8 +575,8 @@ if __name__ == "__main__":
     use_gpu = torch.cuda.is_available()
     print(use_gpu)
     # labelme2coco.labelme2coco()
-    task1()
-    # task2()
+    # task1()
+    task2()
     # L = [0.47727271914482117, 0.20454545319080353, 0.25, 0.3181818127632141, 0.6136363744735718, 0.2954545319080353, 0.2954545319080353, 0.3181818127632141, 0.20454545319080353, 0.5909090638160706, 0.3181818127632141, 0.27272728085517883, 0.5, 0.4545454680919647, 0.5909090638160706, 0.47727271914482117, 0.3636363744735718, 0.6136363744735718, 0.3181818127632141, 0.5681818127632141, 0.6136363744735718, 0.7727272510528564, 0.25, 0.5454545617103577, 0.5227272510528564, 0.15909090638160706, 0.5, 0.22727273404598236, 0.6363636255264282, 0.5454545617103577, 0.40909090638160706, 0.3863636255264282, 0.4545454680919647, 0.25, 0.6136363744735718, 0.5, 0.5, 0.5227272510528564, 0.47727271914482117, 0.40909090638160706, 0.3636363744735718, 0.4318181872367859, 0.15909090638160706, 0.5227272510528564, 0.09090909361839294, 0.27272728085517883, 0.6363636255264282, 0.5227272510528564, 0.6136363744735718, 0.3863636255264282, 0.47727271914482117, 0.3636363744735718, 0.40909090638160706, 0.22727273404598236, 0.22727273404598236, 0.27272728085517883, 0.22727273404598236, 0.7045454382896423, 0.3863636255264282, 0.5681818127632141, 0.47727271914482117, 0.4545454680919647, 0.4545454680919647, 0.4318181872367859, 0.4545454680919647, 0.5909090638160706, 0.3636363744735718, 0.6818181872367859, 0.40909090638160706, 0.4545454680919647, 0.6136363744735718, 0.2954545319080353, 0.5681818127632141, 0.27272728085517883, 0.7045454382896423, 0.5, 0.4318181872367859]
     # L1 = [0.4643567204475403, 0.26885706186294556, 0.6171239614486694, 0.6708859205245972, 0.7056723833084106, 0.4405507445335388, 0.3268565237522125, 0.3990173935890198, 0.3032139539718628, 0.6218065619468689, 0.6284602880477905, 0.462285578250885, 0.6271972060203552, 0.7471458315849304, 0.5575829744338989, 0.5200176239013672, 0.561244010925293, 0.4122476577758789, 0.35733580589294434, 0.469486802816391, 0.5669162273406982, 0.7422673106193542, 0.4681692123413086, 0.43936559557914734, 0.43245142698287964, 0.2475883811712265, 0.35561585426330566, 0.3065759837627411, 0.7418251633644104, 0.6344946622848511, 0.5930187106132507, 0.5161446928977966, 0.7329273819923401, 0.6082422137260437, 0.7847831845283508, 0.5898382663726807, 0.5485522747039795, 0.4756850004196167, 0.7030618786811829, 0.6060481071472168, 0.5550587773323059, 0.5107734799385071, 0.38902539014816284, 0.7591414451599121, 0.2491343766450882, 0.24795778095722198, 0.6254265308380127, 0.5727943181991577, 0.4777734875679016, 0.6717519164085388, 0.5090293288230896, 0.17114344239234924, 0.48825347423553467, 0.32278305292129517, 0.4395012855529785, 0.4865431785583496, 0.39442625641822815, 0.729850709438324, 0.6406647562980652, 0.8138948082923889, 0.5029466152191162, 0.42038512229919434, 0.5987384915351868, 0.5384516716003418, 0.40832310914993286, 0.7349493503570557, 0.4136729836463928, 0.6986573934555054, 0.5785363912582397, 0.4634820818901062, 0.4778715670108795, 0.3328378200531006, 0.4463181495666504, 0.22212979197502136, 0.708525538444519, 0.47413408756256104, 0.5954564213752747]
     # plt.scatter(range(len(L)), L)
@@ -477,3 +586,29 @@ if __name__ == "__main__":
     # plt.figure(2)
     # Err = [(L1[i] - L[i]) / L[i] for i in range(len(L))]
     # print(sum(Err) / len(Err))
+
+
+
+    # net = CNN(1)
+    # net.load_state_dict(torch.load(r'.\epoch_4.pth'))
+    # net.cuda()
+    # loss_func = nn.MSELoss()
+    # loss_func.cuda()
+    # EPOCH = 10
+    # LR = 0.0001
+    # BATCH_SIZE = 20
+    # train_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info1.txt', set_type='A')
+    # validate_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info1.txt', set_type='V')
+    # test_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info1.txt', set_type='E')
+    # train_loader = Data.DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
+    # test_loader = Data.DataLoader(dataset=test_data, batch_size=1, shuffle=False)
+    # validate_loader = Data.DataLoader(dataset=validate_data, batch_size=1, shuffle=False)
+    # net.eval()
+    # with torch.no_grad():
+    #     for step, (validate_pos_img, validate_neg_img, validate_weight) in enumerate(validate_loader):
+    #         if use_gpu:
+    #             validate_pos_img = validate_pos_img.cuda()
+    #             validate_weight = validate_weight.cuda()
+    #         validate_output = net(validate_pos_img)
+    #         loss = loss_func(validate_output, validate_weight)
+    #         print('validate {}'.format(step), loss.detach().cpu().data)
