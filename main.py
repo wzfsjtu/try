@@ -92,7 +92,7 @@ def image_import(image_folder_path, num_of_image):
 
 
 class MyDataSet(Data.Dataset):
-    def __init__(self, info_path, set_type='A'):
+    def __init__(self, info_path, set_type):
         super(MyDataSet, self).__init__()
         self.info_path = info_path
         self.set_type = set_type
@@ -172,8 +172,8 @@ class MyDataSet(Data.Dataset):
         # 导入重量
         weight = self.weight_list[item]
         #   数据归一化 (x - xmin) / (xmax - xmin)
+        #   注意！！！！！精度丢失问题,只能用私有成员
         weight = (weight - self.weight_min) / (self.weight_max - self.weight_min)
-
         return pos_img, neg_img, weight
 
     def __len__(self):
@@ -306,14 +306,20 @@ def task1():
 
 
 def task2():
-
+    root_path = r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\Group'
+    model_name = 'Model'
+    if os.path.exists('\\'.join([root_path, model_name])):
+        print('Model file Exists')
+    else:
+        os.makedirs('\\'.join([root_path, model_name]))
+        print('Model file generated')
     EPOCH = 100
     LR = 0.0001
     BATCH_SIZE = 20
-    train_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info.txt', set_type='A')
-    validate_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info.txt', set_type='V')
-    test_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info.txt', set_type='E')
-    train_loader = Data.DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
+    train_data = MyDataSet(info_path=root_path + '\info.txt', set_type='A')
+    validate_data = MyDataSet(info_path=root_path + '\info.txt', set_type='V')
+    test_data = MyDataSet(info_path=root_path + '\info.txt', set_type='E')
+    train_loader = Data.DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
     test_loader = Data.DataLoader(dataset=test_data, batch_size=1, shuffle=False)
     validate_loader = Data.DataLoader(dataset=validate_data, batch_size=1, shuffle=False)
 
@@ -345,7 +351,7 @@ def task2():
 
             if (epoch + 1) % 5 == 0:
                 print("Epoch {}".format(epoch))
-                torch.save(torch.nn.Module.state_dict(net), '.\epoch_{}.pth'.format(epoch))
+                torch.save(torch.nn.Module.state_dict(net), '\\'.join([root_path, model_name, 'epoch_{}.pth']).format(epoch))
                 net.eval()
                 with torch.no_grad():
                     validate_loss = 0
@@ -364,24 +370,24 @@ def task2():
                 net.train()
 
         net.eval()
-        with torch.no_grad():
-            print("ground|test\n")
-            test_loss = 0
-            test_count = 0
-            for step, (test_pos_img, test_neg_img, test_weight) in enumerate(test_loader):
-                torch.cuda.empty_cache()
-                if use_gpu:
-                    test_pos_img = test_pos_img.cuda()
-                    test_weight = test_weight.cuda()
-                test_output = net(test_pos_img)
-                loss = loss_func(test_output, test_weight)
-                print(test_output.clone().detach().cpu().data, "|", test_weight.clone().detach().cpu().data, "\n")
-                test_grounds.append(float(test_weight.clone().detach().cpu().data[0][0]))
-                test_preds.append(float(test_output.clone().detach().cpu().data[0][0]))
-                test_loss += loss.clone().detach().cpu().data * test_output.size(0)
-                test_count += test_output.size(0)
-
-            print('loss: {}'.format(test_loss / test_count))
+        # with torch.no_grad():
+        #     print("ground|test\n")
+        #     test_loss = 0
+        #     test_count = 0
+        #     for step, (test_pos_img, test_neg_img, test_weight) in enumerate(test_loader):
+        #         torch.cuda.empty_cache()
+        #         if use_gpu:
+        #             test_pos_img = test_pos_img.cuda()
+        #             test_weight = test_weight.cuda()
+        #         test_output = net(test_pos_img)
+        #         loss = loss_func(test_output, test_weight)
+        #         print(test_output.clone().detach().cpu().data, "|", test_weight.clone().detach().cpu().data, "\n")
+        #         test_grounds.append(float(test_weight.clone().detach().cpu().data[0][0]))
+        #         test_preds.append(float(test_output.clone().detach().cpu().data[0][0]))
+        #         test_loss += loss.clone().detach().cpu().data * test_output.size(0)
+        #         test_count += test_output.size(0)
+        #
+        #     print('loss: {}'.format(test_loss / test_count))
 
         # plt.figure('loss')
         # plt.plot(range(len(train_epoch_loss)), train_epoch_loss, color='blue')
@@ -403,10 +409,13 @@ def task2():
 
         net.eval()
         train_loader = Data.DataLoader(dataset=train_data, batch_size=1, shuffle=False)
+        # 注意！在反向Minmaxscale的时候请采用data中的weight_max和weight_min，避免类型不同引发的精度误差
+        mx = train_data.weight_max
+        mn = train_data.weight_min
         with torch.no_grad():
             for i in range(EPOCH // 5):
                 print('Epoch {}'.format(i * 5 + 4))
-                torch.nn.Module.load_state_dict(net, torch.load(r'.\epoch_{}.pth'.format(i * 5 + 4)))
+                torch.nn.Module.load_state_dict(net, torch.load('\\'.join([root_path, model_name, 'epoch_{}.pth']).format(i * 5 + 4)))
                 # train
                 train_loss = 0
                 train_count = 0
@@ -429,8 +438,8 @@ def task2():
                     pred = train_output.clone().detach().cpu().requires_grad_(False).tolist()[0][0]
                     ground = train_weight.clone().detach().cpu().requires_grad_(False).tolist()[0][0]
 
-                    pred = pred * (63 - 19) + 19
-                    ground = ground * (63 - 19) + 19
+                    pred = pred * (mx - mn) + mn
+                    ground = ground * (mx - mn) + mn
                     err = abs(pred - ground) / ground
                     print('pred: {}, ground: {}, err: {}'.format(pred, ground, err))
                     train_err.append(err)
@@ -440,8 +449,8 @@ def task2():
                 print("mean err:", sum(train_err) / len(train_err))
 
                 # plt.show()
-                plt.savefig(r'E:\科研\研究生\小麦\Result\train_{}.png'.format(i * 5 + 4))
-
+                plt.savefig('\\'.join([root_path, model_name, 'train_{}.png']).format(i * 5 + 4))
+                plt.close()
                 # validate
                 validate_loss = 0
                 validate_count = 0
@@ -464,8 +473,8 @@ def task2():
                     pred = validate_output.clone().detach().cpu().requires_grad_(False).tolist()[0][0]
                     ground = validate_weight.clone().detach().cpu().requires_grad_(False).tolist()[0][0]
 
-                    pred = pred * (63 - 19) + 19
-                    ground = ground * (63 - 19) + 19
+                    pred = pred * (mx - mn) + mn
+                    ground = ground * (mx - mn) + mn
                     err = abs(pred - ground) / ground
                     print('pred: {}, ground: {}, err: {}'.format(pred, ground, err))
                     validate_err.append(err)
@@ -475,7 +484,8 @@ def task2():
                 print("mean err:", sum(validate_err) / len(validate_err))
 
                 # plt.show()
-                plt.savefig(r'E:\科研\研究生\小麦\Result\validate_{}.png'.format(i * 5 + 4))
+                plt.savefig('\\'.join([root_path, model_name, 'validate_{}.png']).format(i * 5 + 4))
+                plt.close()
                 # test
                 test_loss = 0
                 test_count = 0
@@ -498,8 +508,8 @@ def task2():
                     pred = test_output.clone().detach().cpu().requires_grad_(False).tolist()[0][0]
                     ground = test_weight.clone().detach().cpu().requires_grad_(False).tolist()[0][0]
 
-                    pred = pred * (63 - 19) + 19
-                    ground = ground * (63 - 19) + 19
+                    pred = pred * (mx - mn) + mn
+                    ground = ground * (mx - mn) + mn
                     err = abs(pred - ground) / ground
                     print('pred: {}, ground: {}, err: {}'.format(pred, ground, err))
                     test_err.append(err)
@@ -507,8 +517,8 @@ def task2():
                 print("loss: {}".format(test_loss / test_count / 2))
                 print(test_err)
                 print("mean err:", sum(test_err) / len(test_err))
-                plt.savefig(r'E:\科研\研究生\小麦\Result\test_{}.png'.format(i * 5 + 4))
-
+                plt.savefig('\\'.join([root_path, model_name, 'test_{}.png']).format(i * 5 + 4))
+                plt.close()
 
     except BaseException as exception:
         print('Exception: {}'.format(exception))
@@ -586,29 +596,17 @@ if __name__ == "__main__":
     # plt.figure(2)
     # Err = [(L1[i] - L[i]) / L[i] for i in range(len(L))]
     # print(sum(Err) / len(Err))
-
-
-
-    # net = CNN(1)
-    # net.load_state_dict(torch.load(r'.\epoch_4.pth'))
-    # net.cuda()
-    # loss_func = nn.MSELoss()
-    # loss_func.cuda()
-    # EPOCH = 10
-    # LR = 0.0001
-    # BATCH_SIZE = 20
-    # train_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info1.txt', set_type='A')
-    # validate_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info1.txt', set_type='V')
-    # test_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info1.txt', set_type='E')
-    # train_loader = Data.DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
-    # test_loader = Data.DataLoader(dataset=test_data, batch_size=1, shuffle=False)
-    # validate_loader = Data.DataLoader(dataset=validate_data, batch_size=1, shuffle=False)
-    # net.eval()
-    # with torch.no_grad():
-    #     for step, (validate_pos_img, validate_neg_img, validate_weight) in enumerate(validate_loader):
-    #         if use_gpu:
-    #             validate_pos_img = validate_pos_img.cuda()
-    #             validate_weight = validate_weight.cuda()
-    #         validate_output = net(validate_pos_img)
-    #         loss = loss_func(validate_output, validate_weight)
-    #         print('validate {}'.format(step), loss.detach().cpu().data)
+    #
+    # root_path = r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\Group'
+    # train_data = MyDataSet(info_path=root_path + '\info.txt', set_type='A')
+    # train_loader = Data.DataLoader(dataset=train_data, batch_size=1, shuffle=False)
+    # pos_areas = train_data.pos_area_list
+    # neg_areas = train_data.neg_area_list
+    # weights = train_data.weight_list
+    # plt.figure(1)
+    # plt.scatter(pos_areas, neg_areas)
+    # plt.grid()
+    # plt.figure(2)
+    # plt.scatter(pos_areas, weights)
+    # plt.grid()
+    # plt.show()

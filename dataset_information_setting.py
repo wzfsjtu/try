@@ -93,7 +93,7 @@ def start(positive_folder_path, negative_folder_path, weight_excel_path, txt_pat
 
     #   black_list start
     for pair in black_list:
-        ind = (14 - pair[0]) * cols + cols - pair[1]
+        ind = (rows - pair[0]) * cols + cols - pair[1]
         # set black_weight -100
         weight_data[ind] = -EXCEPTION_WEIGHT
         set_list[ind] = 'N'
@@ -139,8 +139,8 @@ def start(positive_folder_path, negative_folder_path, weight_excel_path, txt_pat
 
 
 if __name__ == '__main__':
-    start(r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\outputc',
-          r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\outputc1',
+    start(r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\Group\outputc',
+          r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\Group\outputc1',
           r'E:\科研\研究生\小麦\样本数据\2020.1.15\工作簿1.xlsx',
-          r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info.txt',
+          r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\Group\info.txt',
           black_list=[(1, 25), (2, 22), (7, 23), (9, 23), (13, 15)])
