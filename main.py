@@ -306,12 +306,13 @@ def task1():
 
 
 def task2():
+
     EPOCH = 100
     LR = 0.0001
     BATCH_SIZE = 20
-    train_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info1.txt', set_type='A')
-    validate_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info1.txt', set_type='V')
-    test_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info1.txt', set_type='E')
+    train_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info.txt', set_type='A')
+    validate_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info.txt', set_type='V')
+    test_data = MyDataSet(info_path=r'E:\科研\研究生\小麦\样本数据\2020.1.15\用于称重\info.txt', set_type='E')
     train_loader = Data.DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
     test_loader = Data.DataLoader(dataset=test_data, batch_size=1, shuffle=False)
     validate_loader = Data.DataLoader(dataset=validate_data, batch_size=1, shuffle=False)
@@ -381,7 +382,6 @@ def task2():
                 test_count += test_output.size(0)
 
             print('loss: {}'.format(test_loss / test_count))
-
 
         # plt.figure('loss')
         # plt.plot(range(len(train_epoch_loss)), train_epoch_loss, color='blue')

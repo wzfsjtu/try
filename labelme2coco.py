@@ -20,6 +20,10 @@ import matplotlib.pyplot as plt
 
 def labelme2coco():
     # https://github.com/wkentaro/labelme/blob/master/examples/instance_segmentation/labelme2coco.py
+    # It generates:
+    #   - data_dataset_coco/JPEGImages
+    #   - data_dataset_coco/annotations.json
+    # Terminal: labelme2coco.py data_annotated data_dataset_coco --labels labels.txt
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
